@@ -1,0 +1,86 @@
+/*
+ * Company: 
+ * Copyright (c) 2012-2032 
+ * All Rights Reserved.
+ */
+package com.cn.messageQueue;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+
+/**
+ * 
+ * 
+ * 
+ * Description: 用于启动消息处理中心
+ * 
+ * @author LiuHao
+ * @date 2019年12月11日上午10:33:03
+ * @version 1.0
+ */
+public class BrokerServer implements Runnable {
+
+	public static int SERVICE_PORT = 6767;
+
+	private final Socket socket;
+
+	public BrokerServer(Socket socket) {
+		this.socket = socket;
+	}
+
+	public void run() {
+		BufferedReader in = null;
+		PrintWriter out = null;
+		try {
+			in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+			out = new PrintWriter(socket.getOutputStream());
+			while (true) {
+				String str = in.readLine();
+				if (str == null) {
+					continue;
+				}
+				System.out.println("接收到原始数据：" + str);
+
+				if (str.equals("CONSUME")) { // CONSUME 表示要消费一条消息
+					// 从消息队列中消费一条消息
+					String message = Broker.consume();
+					out.println(message);
+					out.flush();
+				} else if (str.contains("SEND:")) {
+					// 接受到的请求包含SEND:字符串 表示生产消息放到消息队列中
+					Broker.produce(str);
+				} else {
+					System.out.println("原始数据:" + str + "没有遵循协议,不提供相关服务");
+				}
+			}
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}finally {
+			if(out != null) {
+				out.close();
+			}
+			if(in != null) {
+				try {
+					in.close();
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+
+	public static void main(String[] args) throws Exception {
+		ServerSocket server = new ServerSocket(SERVICE_PORT);
+		while (true) {
+			BrokerServer brokerServer = new BrokerServer(server.accept());
+			new Thread(brokerServer).start();
+		}
+	}
+
+}
